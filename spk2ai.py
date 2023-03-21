@@ -5,67 +5,59 @@ import requests
 import openai
 import azure.cognitiveservices.speech as speechsdk
 
+#
 
 with open("config.json", "r") as f:
     config = json.load(f)
 
-speech_region = config["speech_region"]
-speech_key = config["speech_key"]
 openai.api_key = config["openai_api_key"]
 
+speech_config = speechsdk.SpeechConfig(subscription=config["speech_key"], region=config["speech_region"])
+speech_config.speech_synthesis_language = "en-IN" # Default: "en-US"
+speech_config.speech_synthesis_voice_name ="en-IN-PrabhatNeural" # Default: "en-US-JennyNeural"
 
-def speech_recognize_from_microphone():
-    """使用麦克风进行语音识别"""
-    speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
-    speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config)
-    print("开始说话...")
+speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config)
+speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
+
+history = []
+to_exit = False
+
+while True:
+    print("Please start speaking...")
     result = speech_recognizer.recognize_once_async().get()
-    return result.text
+    input_text = result.text
+    print("You said: " + input_text)
 
+    if input_text.endswith("Exit."):
+        input_text = "That's all for today. Bye."
+        to_exit = True
 
-def text_to_speech(text):
-    """将文本转换成语音输出"""
-    speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
-    speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
-    result = speech_synthesizer.speak_text_async(text).get()
+    messages = []
+    for x, y in history[-20:]:
+        messages.append({"role": "user", "content": x})
+        messages.append({"role": "assistant", "content": y})
+    messages.append({"role": "user", "content": input_text})
 
-
-def send_message_to_chat_api(message):
-    """将对话内容发送到后台文本聊天API"""
-    response = openai.Completion.create(
-        model="text-davinci-003",
-        prompt=message,
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
         temperature=0.3,
-        max_tokens=60,
+        #max_tokens=4096,
         top_p=1.0,
         frequency_penalty=0.0,
         presence_penalty=0.0,
-        stop=["."])
-    return response.choices[0].text
+    )
+    response_text = response.choices[0].message.content
+    print("AI said: " + response_text.strip() + "\n")
 
+    history.append((input_text, response_text))
+    if len(history) > 100:
+        history.pop(0)
 
-def run_dialog():
-    """运行语音对话程序"""
-    exit = False
-    while True:
-        # 语音输入
-        user_input = speech_recognize_from_microphone()
-        print("你说: " + user_input)
+    speech_synthesizer.speak_text_async(response_text).get()
 
-        if user_input.lower() == "exit.":
-            user_input = "That's all for today. Bye."
-            exit = True
+    if to_exit:
+        break
 
-        # 将语音输入发送到后台文本聊天API进行处理
-        bot_response = send_message_to_chat_api(user_input)
-        print("机器人说: " + bot_response.strip() + "\n\n")
-
-        # 将机器人的文本回复转换成语音输出
-        text_to_speech(bot_response)
-
-        if exit:
-            break
-
-
-if __name__ == '__main__':
-    run_dialog()
+#
+# (END)
