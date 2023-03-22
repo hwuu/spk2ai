@@ -129,4 +129,5 @@ dmypy.json
 .pyre/
 
 # Project-specific files
-config.json
+config*.json
+!config.template.json
