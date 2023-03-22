@@ -25,55 +25,75 @@ speech_config.speech_synthesis_voice_name = "%s-%sNeural" % (config["language"],
 speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config)
 speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
 
+ss_completed = True
+def mark_ss_completed(evt):
+    ss_completed = True
+speech_synthesizer.synthesis_completed.connect(lambda evt: mark_ss_completed(evt))
+speech_synthesizer.synthesis_canceled.connect(lambda evt: mark_ss_completed(evt))
+
 #
 
 print("Please start speaking. You can say 'stop' to intercept the AI and say 'exit' to return to your real, yet boring, world.\n")
 
 history = []
 while True:
+    to_exit = False
+
     print(f"[{len(history)}] Me: ", end="", flush=True)
     result = speech_recognizer.recognize_once_async().get()
     input_text = result.text
     print(input_text + "\n")
 
-    response_text = ""
-    cmd = re.sub(r'[^a-zA-Z]', ' ', input_text).strip().lower()
-    if cmd == "stop":
-        speech_synthesizer.stop_speaking()
-        if config["language"].split("-")[0] == "zh":
-            response_text = "好的, 请你先说."
-        elif config["language"].split("-")[0] == "en":
-            response_text = "OK. I'm listening."
-    elif cmd == "exit":
-        if config["language"].split("-")[0] == "zh":
-            response_text = "好的, 再见."
-        elif config["language"].split("-")[0] == "en":
-            response_text = "OK. See you next time."
-    else:
-        messages = []
-        for x, y in history:
-            messages.append({"role": "user", "content": x})
-            messages.append({"role": "assistant", "content": y})
-        messages.append({"role": "user", "content": input_text})
-        response = openai.ChatCompletion.create(
+    if not ss_completed:
+        temp_response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=messages,
-            temperature=0.3,
-            #max_tokens=4096,
-            top_p=1.0,
-            frequency_penalty=0.0,
-            presence_penalty=0.0,
+            messages=[{
+                "role": "user",
+                "content": f"我在和某人对话, 正当我说到一半的时候他说: '{input_text}'. 请问他是否是想打断我说话？如果是请回答 'Y'，如果否或不确定请回答 'N'. 回答不要包含标点符号.",
+            }],
+            temperature=0.0,
         )
-        response_text = response.choices[0].message.content
-        history.append((input_text, response_text))
+        temp_response_text = temp_response.choices[0].message.content.strip()
+        if temp_response_text == "Y":
+            speech_synthesizer.stop_speaking()
+            ss_completed = True
+        continue
 
-    print(f"[{len(history)}] AI: " + response_text.strip() + "\n")
-    f = speech_synthesizer.speak_text_async(response_text)
+    temp_response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{
+            "role": "user",
+            "content": f"我在和某人对话，他说: '{input_text}'. 请问他是否是想离开？如果是请回答 'Y'，如果否或不确定请回答 'N'. 回答不要包含标点符号.",
+        }],
+        temperature=0.0,
+    )
+    temp_response_text = temp_response.choices[0].message.content.strip()
+    if temp_response_text == "Y":
+        to_exit = True
 
-    if cmd == "stop":
-        f.get()
-    elif cmd == "exit":
-        f.get()
+    messages = []
+    for x, y in history:
+        messages.append({"role": "user", "content": x})
+        messages.append({"role": "assistant", "content": y})
+    messages.append({"role": "user", "content": input_text})
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        temperature=0.3,
+        #max_tokens=4096,
+        top_p=1.0,
+        frequency_penalty=0.0,
+        presence_penalty=0.0,
+    )
+    response_text = response.choices[0].message.content
+    history.append((input_text, response_text))
+
+    print(f"[{len(history) - 1}] AI: " + response_text.strip() + "\n")
+    ss_completed = False
+    ssrf = speech_synthesizer.speak_text_async(response_text)
+
+    if to_exit:
+        ssrf.get()
         break
 
 #
