@@ -1,6 +1,6 @@
 import os
-import re
 import json
+import time
 import argparse
 
 import openai
@@ -25,26 +25,42 @@ speech_config.speech_synthesis_voice_name = "%s-%sNeural" % (config["language"],
 speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config)
 speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config)
 
-ss_completed = True
-def mark_ss_completed(evt):
-    ss_completed = True
-speech_synthesizer.synthesis_completed.connect(lambda evt: mark_ss_completed(evt))
-speech_synthesizer.synthesis_canceled.connect(lambda evt: mark_ss_completed(evt))
+is_speaking = False
+speech_synthesizer.synthesis_started.connect(lambda _: globals().update(is_speaking=True))
+speech_synthesizer.synthesis_completed.connect(lambda _: globals().update(is_speaking=False))
+speech_synthesizer.synthesis_canceled.connect(lambda _: globals().update(is_speaking=False))
 
 #
 
-print("Please start speaking. You can say 'stop' to intercept the AI and say 'exit' to return to your real, yet boring, world.\n")
-
 history = []
+#
+# For debugging.
+#c = 0
+#
 while True:
-    to_exit = False
-
+    is_exiting = False
     print(f"[{len(history)}] Me: ", end="", flush=True)
+    #
+    # For debugging.
+    #c += 1
+    #if c == 1:
+    #    input_text = "请念李白的静夜思"
+    #elif c >= 2:
+    #    time.sleep(2)
+    #    input_text = "李白是谁"
+    #elif c == 3:
+    #    break
+    #else:
+    #
     result = speech_recognizer.recognize_once_async().get()
     input_text = result.text
     print(input_text + "\n")
 
-    if not ss_completed:
+    #
+    # For debugging.
+    #print(f"(DEBUG) is_speaking: {is_speaking}")
+    #
+    if is_speaking:
         temp_response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{
@@ -54,9 +70,13 @@ while True:
             temperature=0.0,
         )
         temp_response_text = temp_response.choices[0].message.content.strip()
+        #
+        # For debugging.
+        #print(f"(DEBUG) is_to_interrupt: {temp_response_text}")
+        #
         if temp_response_text == "Y":
             speech_synthesizer.stop_speaking()
-            ss_completed = True
+        time.sleep(2)
         continue
 
     temp_response = openai.ChatCompletion.create(
@@ -69,7 +89,7 @@ while True:
     )
     temp_response_text = temp_response.choices[0].message.content.strip()
     if temp_response_text == "Y":
-        to_exit = True
+        is_exiting = True
 
     messages = []
     for x, y in history:
@@ -80,7 +100,6 @@ while True:
         model="gpt-3.5-turbo",
         messages=messages,
         temperature=0.3,
-        #max_tokens=4096,
         top_p=1.0,
         frequency_penalty=0.0,
         presence_penalty=0.0,
@@ -89,10 +108,9 @@ while True:
     history.append((input_text, response_text))
 
     print(f"[{len(history) - 1}] AI: " + response_text.strip() + "\n")
-    ss_completed = False
     ssrf = speech_synthesizer.speak_text_async(response_text)
 
-    if to_exit:
+    if is_exiting:
         ssrf.get()
         break
 
