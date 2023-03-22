@@ -1,5 +1,7 @@
 {
   "speech_region": "",
   "speech_key": "",
-  "openai_api_key": ""
+  "openai_api_key": "",
+  "language": "zh-CN",
+  "voice": "Xiaoxiao"
 }
