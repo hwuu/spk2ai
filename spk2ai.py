@@ -62,14 +62,16 @@ def ask_ai(input_text, temperature=0.3, add_to_history=True):
     response_text = response.choices[0].message.content.strip()
     if add_to_history:
         chat_history.append((input_text, response_text))
-    
+
     return response_text
 
 #
 
+speech_synthesizer.speak_text_async("你好, 我是吴梦鸡, 你有啥不懂的都可以问我. 现在开始吧.").get()
+
 #
 # For debugging.
-c = 0
+#c = 0
 #
 while True:
     is_interrupting = False
@@ -77,6 +79,7 @@ while True:
     print(f"[{len(chat_history)}] Me: ", end="", flush=True)
     #
     # For debugging.
+    """
     c += 1
     if c == 1:
         input_text = "请念李白的静夜思"
@@ -94,13 +97,14 @@ while True:
         time.sleep(10)
         break
     else:
+    """
     #
-        input_text = speech_recognizer.recognize_once_async().get().text
+    input_text = speech_recognizer.recognize_once_async().get().text
     print(input_text + "\n")
 
     #
     # For debugging.
-    print(f"(DEBUG) is_speaking: {is_speaking}")
+    #print(f"(DEBUG) is_speaking: {is_speaking}")
     #
     if is_speaking:
         temp_response_text = ask_ai(
@@ -109,7 +113,7 @@ while True:
             add_to_history=False)
         #
         # For debugging.
-        print(f"(DEBUG) is_interrupting: {temp_response_text}")
+        #print(f"(DEBUG) is_interrupting: {temp_response_text}")
         #
         if temp_response_text == "Y":
             speech_synthesizer.stop_speaking()
@@ -122,7 +126,7 @@ while True:
         add_to_history=False)
     #
     # For debugging.
-    print(f"(DEBUG) is_exiting: {temp_response_text}")
+    #print(f"(DEBUG) is_exiting: {temp_response_text}")
     #
     if temp_response_text == "Y":
         is_exiting = True
