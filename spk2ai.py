@@ -29,84 +29,107 @@ speech_synthesizer.synthesis_started.connect(lambda _: globals().update(is_speak
 speech_synthesizer.synthesis_completed.connect(lambda _: globals().update(is_speaking=False))
 speech_synthesizer.synthesis_canceled.connect(lambda _: globals().update(is_speaking=False))
 
+chat_history = []
+
 #
 
-history = []
-#
-# For debugging.
-#c = 0
-#
-while True:
-    is_exiting = False
-    print(f"[{len(history)}] Me: ", end="", flush=True)
-    #
-    # For debugging.
-    #c += 1
-    #if c == 1:
-    #    input_text = "请念李白的静夜思"
-    #elif c >= 2:
-    #    time.sleep(2)
-    #    input_text = "李白是谁"
-    #elif c == 3:
-    #    break
-    #else:
-    #
-    result = speech_recognizer.recognize_once_async().get()
-    input_text = result.text
-    print(input_text + "\n")
+def ask_ai(input_text, temperature=0.3, add_to_history=True):
+    """Ask AI a question and get the response with text.
 
-    #
-    # For debugging.
-    #print(f"(DEBUG) is_speaking: {is_speaking}")
-    #
-    if is_speaking:
-        temp_response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{
-                "role": "user",
-                "content": f"我在和某人对话, 正当我说到一半的时候他说: '{input_text}'. 请问他是否是想打断我说话？如果是请回答 'Y'，如果否或不确定请回答 'N'. 回答不要包含标点符号.",
-            }],
-            temperature=0.0,
-        )
-        temp_response_text = temp_response.choices[0].message.content.strip()
-        #
-        # For debugging.
-        #print(f"(DEBUG) is_to_interrupt: {temp_response_text}")
-        #
-        if temp_response_text == "Y":
-            speech_synthesizer.stop_speaking()
-        time.sleep(2)
-        continue
+    Args:
+        input_text (str): Text to be sent to AI.
+        temperature (float, optional): Temperature of the model. Value between 0 and 1. Defaults to 0.3.
+        add_to_history (bool, optional): Whether the input/response pair should be put into the chat history. Defaults to True.
 
-    temp_response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{
-            "role": "user",
-            "content": f"我在和某人对话，他说: '{input_text}'. 请问他是否是想离开？如果是请回答 'Y'，如果否或不确定请回答 'N'. 回答不要包含标点符号.",
-        }],
-        temperature=0.0,
-    )
-    temp_response_text = temp_response.choices[0].message.content.strip()
-    if temp_response_text == "Y":
-        is_exiting = True
+    Returns:
+        str: Response text from AI.
+    """
+    global chat_history
 
     messages = []
-    for x, y in history:
+    for x, y in chat_history:
         messages.append({"role": "user", "content": x})
         messages.append({"role": "assistant", "content": y})
     messages.append({"role": "user", "content": input_text})
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=messages,
-        temperature=0.3,
+        temperature=temperature,
         top_p=1.0,
         frequency_penalty=0.0,
         presence_penalty=0.0,
     )
-    response_text = response.choices[0].message.content
-    history.append((input_text, response_text))
+    response_text = response.choices[0].message.content.strip()
+    if add_to_history:
+        chat_history.append((input_text, response_text))
+    
+    return response_text
 
-    print(f"[{len(history) - 1}] AI: " + response_text.strip() + "\n")
+#
+
+#
+# For debugging.
+c = 0
+#
+while True:
+    is_interrupting = False
+    is_exiting = False
+    print(f"[{len(chat_history)}] Me: ", end="", flush=True)
+    #
+    # For debugging.
+    c += 1
+    if c == 1:
+        input_text = "请念李白的静夜思"
+        continue
+    elif c >= 2 and c <= 2:
+        time.sleep(2)
+        input_text = "李白是谁"
+    elif c >= 3 and c <= 5:
+        time.sleep(2)
+        input_text = "停, 不要说了"
+    elif c >= 6 and c <= 7:
+        time.sleep(2)
+        input_text = "好的，再见"
+    elif c >= 8:
+        time.sleep(10)
+        break
+    else:
+    #
+        input_text = speech_recognizer.recognize_once_async().get().text
+    print(input_text + "\n")
+
+    #
+    # For debugging.
+    print(f"(DEBUG) is_speaking: {is_speaking}")
+    #
+    if is_speaking:
+        temp_response_text = ask_ai(
+            f"假设当你前一句话说到一半的时候我说: '{input_text}', 你觉得我是否是想打断你说话或请求你暂停？如果是请回答 'Y'，如果不是或不确定请回答 'N'. 回答不要包含标点符号.",
+            temperature=0.0,
+            add_to_history=False)
+        #
+        # For debugging.
+        print(f"(DEBUG) is_interrupting: {temp_response_text}")
+        #
+        if temp_response_text == "Y":
+            speech_synthesizer.stop_speaking()
+            is_interrupting = True
+        continue
+
+    temp_response_text = ask_ai(
+        f"如果我接下来说: '{input_text}', 你觉得我是否是想离开？如果是请回答 'Y'，如果否或不确定请回答 'N'. 回答不要包含标点符号.",
+        temperature=0.0,
+        add_to_history=False)
+    #
+    # For debugging.
+    print(f"(DEBUG) is_exiting: {temp_response_text}")
+    #
+    if temp_response_text == "Y":
+        is_exiting = True
+
+    response_text = ask_ai(input_text)
+
+    print(f"[{len(chat_history) - 1}] AI: " + response_text.strip() + "\n")
     ssrf = speech_synthesizer.speak_text_async(response_text)
 
     if is_exiting:
