@@ -60,7 +60,7 @@ def ask_ai(input_text, temperature=0.3, add_to_history=True):
         frequency_penalty=0.0,
         presence_penalty=0.0,
     )
-    response_text = response.choices[0].message.content
+    response_text = response.choices[0].message.content.strip()
     if add_to_history:
         chat_history.append((input_text, response_text))
     
@@ -82,16 +82,17 @@ while True:
     if c == 1:
         input_text = "请念李白的静夜思"
         continue
-    elif c >= 2 and c <= 3:
+    elif c >= 2 and c <= 2:
         time.sleep(2)
         input_text = "李白是谁"
-    elif c >= 4 and c <= 5:
+    elif c >= 3 and c <= 5:
         time.sleep(2)
-        input_text = "等一等, 不要说了"
-    elif c >= 6 and c < 7:
+        input_text = "停, 不要说了"
+    elif c >= 6 and c <= 7:
         time.sleep(2)
-        input_text = "退出"
-    elif c >= 7:
+        input_text = "好的，再见"
+    elif c >= 8:
+        time.sleep(10)
         break
     else:
     #
@@ -104,7 +105,7 @@ while True:
     #
     if is_speaking:
         temp_response_text = ask_ai(
-            f"假设当你正在说你刚才那句话时候我说: '{input_text}'. 你觉得我是否是想打断你说话？如果是请回答 'Y'，如果否或不确定请回答 'N'. 回答不要包含标点符号.",
+            f"假设当你前一句话说到一半的时候我说: '{input_text}', 你觉得我是否是想打断你说话或请求你暂停？如果是请回答 'Y'，如果不是或不确定请回答 'N'. 回答不要包含标点符号.",
             temperature=0.0,
             add_to_history=False)
         #
@@ -117,7 +118,7 @@ while True:
         continue
 
     temp_response_text = ask_ai(
-        f"如果我接下来说: '{input_text}'. 你觉得我是否是想离开？如果是请回答 'Y'，如果否或不确定请回答 'N'. 回答不要包含标点符号.",
+        f"如果我接下来说: '{input_text}', 你觉得我是否是想离开？如果是请回答 'Y'，如果否或不确定请回答 'N'. 回答不要包含标点符号.",
         temperature=0.0,
         add_to_history=False)
     #
